@@ -78,11 +78,11 @@ public class RabbitConfig {
         return new NotificationReceiver();
     }
 
-    @Bean
-    MessageListenerAdapter notificationsListenerAdapter() {
-        return new MessageListenerAdapter(notificationReceiver(),jsonMessageConverter());
-    }
-
+//    @Bean
+//    MessageListenerAdapter notificationsListenerAdapter() {
+//        return new MessageListenerAdapter(notificationReceiver(),jsonMessageConverter());
+//    }
+//
 
 
     @Bean
@@ -95,22 +95,22 @@ public class RabbitConfig {
         return new JSONParser();
     }
 
-    @Bean
-    Binding topicBinding() {
-        return BindingBuilder.bind(notificationsQueue()).to(topicExchange()).with(notificationQueue);
-    }
+//    @Bean
+//    Binding topicBinding() {
+//        return BindingBuilder.bind(notificationsQueue()).to(topicExchange()).with(notificationQueue);
+//    }
 
     @Bean
     RestTemplate restTemplate() {
         return new RestTemplate();
     }
 
-    @Bean
-    SimpleMessageListenerContainer notificationContainer(ConnectionFactory connectionFactory) {
-        SimpleMessageListenerContainer container = new SimpleMessageListenerContainer();
-        container.setConnectionFactory(connectionFactory);
-        container.setQueueNames(notificationQueue);
-        container.setMessageListener(notificationsListenerAdapter());
-        return container;
-    }
+//    @Bean
+//    SimpleMessageListenerContainer notificationContainer(ConnectionFactory connectionFactory) {
+//        SimpleMessageListenerContainer container = new SimpleMessageListenerContainer();
+//        container.setConnectionFactory(connectionFactory);
+//        container.setQueueNames(notificationQueue);
+//        container.setMessageListener(notificationsListenerAdapter());
+//        return container;
+//    }
 }

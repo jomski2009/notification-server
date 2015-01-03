@@ -21,12 +21,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 @Service
 public class NotificationRestServiceImpl implements NotificationRestService {
@@ -35,7 +33,9 @@ public class NotificationRestServiceImpl implements NotificationRestService {
     private final static String GCM_KEY_URL = "https://android.googleapis.com/gcm/notification";
     private static final String GOOGLE_API_KEY = "key=AIzaSyClDqYSytbUpuCJYq6JMMRrfLcVJbuiPPY";
     private static final String GOOGLE_PROJECT_ID = "355368739731";
-    private static final String NOTIFICATION_KEY_PREFIX= "ymAnd_";
+    private static final String NOTIFICATION_KEY_PREFIX = "yookos_";
+    private static final String BLOCKED_LIST_URL = "https://www.yookos.com/api/core/v3/people/preferences/admin/block/";
+    private static final String ADMIN_AUTH = "Basic Y2VjaHVyY2gtYWRtaW46SnVsaWV0QDcwNzI=";
 
     Logger log = LoggerFactory.getLogger(this.getClass());
     RestTemplate restTemplate = new RestTemplate();
@@ -80,6 +80,58 @@ public class NotificationRestServiceImpl implements NotificationRestService {
         log.info("Initiating Batch notification processing");
         ProcessBatchNotifications pbn = new ProcessBatchNotifications(batchNotificationResource);
         new Thread(pbn).start();
+    }
+
+    @Override
+    public String processBlockList() {
+        DBCollection blockedlists;
+        blockedlists = client.getDB("yookosreco").getCollection("blockedlists");
+        if (blockedlists == null) {
+            blockedlists = client.getDB("yookosreco").createCollection("blockedlists", null);
+        }
+
+        //Retrieve all users with android devices
+        DBCollection deviceOwners = client.getDB("yookosreco").getCollection("androidusers");
+        DBCursor owners = deviceOwners.find().sort(new BasicDBObject("userid", -1));
+
+        //For each user, go to the core and get their blocked list
+        for (DBObject owner : owners) {
+            String tempId = owner.get("userid").toString();
+            log.info(tempId);
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("Authorization", ADMIN_AUTH);
+
+            HttpEntity httpEntity = new HttpEntity(headers);
+
+            String blocked_url = BLOCKED_LIST_URL + tempId;
+            List<String> blocklist = new ArrayList<>();
+            //ResponseEntity<? extends List> entity = restTemplate.getForEntity(blocked_url, blocklist.getClass(), Collections.EMPTY_LIST);
+            try{
+                ResponseEntity<String> entity = restTemplate.exchange(blocked_url, HttpMethod.GET, httpEntity, String.class, Collections.EMPTY_MAP);
+
+                //log.info("Blocked list for {}: {}", tempId, entity.getBody());
+
+                //Create a blocked-list document for that user
+                if(entity.getBody() != null){
+                    String[] blockedUsers = entity.getBody().split(",");
+                    log.info(blockedUsers[0].trim());
+                    for (String blockedUser : blockedUsers){
+                        blockedlists.update(new BasicDBObject("userid", Integer.parseInt(tempId)),
+                                new BasicDBObject("$addToSet",
+                                        new BasicDBObject("blockedlist", Integer.parseInt(blockedUser))),true,false);
+                    }
+                }
+
+            }catch(Exception e){
+                log.error(e.getMessage());
+            }
+        }
+
+
+
+        //Return number of users processed
+        return null;
     }
 
     @Override
@@ -142,10 +194,13 @@ public class NotificationRestServiceImpl implements NotificationRestService {
                 headers.set("Authorization", GOOGLE_API_KEY);
                 headers.set("project_id", GOOGLE_PROJECT_ID);
 
-                ResponseEntity<String> responseEntity = restTemplate.exchange(GCM_KEY_URL, HttpMethod.POST, new HttpEntity<>(reqobj, headers), String.class);
-                String notificationKeyResponse = responseEntity.getBody();
-                //Convert to json to extract the notification key value
+                log.info("Header values: {}", headers.values().toArray());
+
+
                 try {
+                    ResponseEntity<String> responseEntity = restTemplate.exchange(GCM_KEY_URL, HttpMethod.POST, new HttpEntity<>(reqobj, headers), String.class);
+                    String notificationKeyResponse = responseEntity.getBody();
+                    //Convert to json to extract the notification key value
                     JSONObject key = (JSONObject) jsonParser.parse(notificationKeyResponse);
                     String notificationKey = key.get("notification_key").toString();
                     List<String> reg_ids = new ArrayList<>();
@@ -154,11 +209,15 @@ public class NotificationRestServiceImpl implements NotificationRestService {
                             .append("notification_key", notificationKey)
                             .append("userid", reg.getUserid())
                             .append("type", "android")
-                            .append("registration_ids", reg_ids ));
+                            .append("registration_ids", reg_ids));
                     log.info(writeResult.toString());
 
                 } catch (ParseException e) {
                     e.printStackTrace();
+                } catch (HttpClientErrorException exception) {
+                    log.info("Response text: {}", exception.getStatusText());
+                } catch (MongoException me) {
+                    log.info("Mongo error text: {}", me.getMessage());
                 }
             }
 
@@ -178,7 +237,7 @@ public class NotificationRestServiceImpl implements NotificationRestService {
 
         if (device != null) {
             //Found an entry. Update regid array
-            log.info(device.toString());
+            log.info("found device: {}", device.toString());
             devices.update(device, new BasicDBObject("$addToSet", new BasicDBObject("registration_ids", regId)));
 
         } else {
@@ -190,12 +249,15 @@ public class NotificationRestServiceImpl implements NotificationRestService {
             request.getRegistration_ids().add(regId);
             request.setOperation("create");
             String reqobj = gson.toJson(request);
+            log.info("Request Object: {}", reqobj);
 
             //First obtain a new notification_key
             HttpHeaders headers = new HttpHeaders();
             headers.set("Content-Type", MediaType.APPLICATION_JSON_VALUE);
             headers.set("Authorization", GOOGLE_API_KEY);
             headers.set("project_id", GOOGLE_PROJECT_ID);
+
+            log.info("Headers: {}", headers.values().toArray().toString());
 
             ResponseEntity<String> responseEntity = restTemplate.exchange(GCM_KEY_URL, HttpMethod.POST, new HttpEntity<>(reqobj, headers), String.class);
             String notificationKeyResponse = responseEntity.getBody();
@@ -209,7 +271,7 @@ public class NotificationRestServiceImpl implements NotificationRestService {
                         .append("notification_key", notificationKey)
                         .append("userid", userId)
                         .append("type", "android")
-                        .append("registration_ids", reg_ids ));
+                        .append("registration_ids", reg_ids));
                 log.info(writeResult.toString());
                 result = writeResult.toString();
 

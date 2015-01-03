@@ -286,132 +286,164 @@ public class UserServiceImpl implements UserService {
 
     }
 
+    class ProcessBatchUserUpdates implements Runnable {
+        List<String> rows;
+
+        public ProcessBatchUserUpdates(List<String> rows) {
+            this.rows = rows;
+        }
+
+        @Override
+        public void run() {
+            int rowCount = 0;
+            List<Integer> missedRows = new ArrayList<>();
+
+            Map<String, Object> params = new HashMap<>();
+
+            for (String r : rows) {
+                String[] rd = r.split(";");
+                log.info("Row count: " + (rowCount + 1) + "|" + r);
+                log.info("Row count: " + (rowCount + 1)
+                        + "| Array Length: " + rd.length);
+
+                if (rd.length == 8) {
+                    // User user = new User();
+                    Map<String, Object> props = new HashMap<>();
+
+                    props.put("userid", Long.parseLong(rd[0]));
+                    props.put("username", sanitize(rd[1]));
+                    props.put("firstname", sanitize(rd[2]));
+                    props.put("lastname", sanitize(rd[3]));
+                    props.put("name", sanitize(rd[2]) + " " + sanitize(rd[3]));
+                    props.put("email", sanitize(rd[4]));
+                    props.put("creationdate", Long.parseLong(rd[5]));
+                    props.put("lastloggedin", Long.parseLong(rd[6]));
+                    props.put("lastprofileupdate", Long.parseLong(rd[7]));
+
+                    props.put("userenabled", true);
+
+                    //holder.add(props);
+
+
+                    try (Transaction tx = gd.beginTx()) {
+                        System.out.println("Processing row: " + rowCount);
+                        params.put("props", props);
+                        engine.query("create (p:Person{props})", params);
+                        params.clear();
+                        tx.success();
+
+                    } catch (RestResultException rre) {
+                        log.info(rre.getLocalizedMessage());
+                    } catch (CypherExecutionException cee) {
+                        log.info(cee.getLocalizedMessage());
+                    } catch (Exception e) {
+                        log.info(e.getLocalizedMessage());
+                    }
+
+                } else {
+                    //Log the violating row...
+                    missedRows.add(rowCount);
+                    log.info("Skipping row number: " + rowCount);
+
+                }
+                rowCount++;
+            }
+
+            log.info("List of missed rows: " + missedRows.toString());
+
+        }
+    }
+
     @Override
     public void addToUserGraph(List<String> rows) {
-        int rowCount = 0;
-        List<Integer> missedRows = new ArrayList<>();
+        ProcessBatchUserUpdates updates = new ProcessBatchUserUpdates(rows);
+        new Thread(updates).start();
+    }
 
-        Map<String, Object> params = new HashMap<>();
+    class ProcessBatchActivities implements Runnable {
 
-        for (String r : rows) {
-            String[] rd = r.split(";");
-            log.info("Row count: " + (rowCount + 1) + "|" + r);
-            log.info("Row count: " + (rowCount + 1)
-                    + "| Array Length: " + rd.length);
+        List<String> activities;
 
-            if (rd.length == 8) {
-                // User user = new User();
+        public ProcessBatchActivities(List<String> activities) {
+            this.activities = activities;
+        }
+
+        @Override
+        public void run() {
+            int rowCount = 0;
+            List<Integer> missedRows = new ArrayList<>();
+
+            StringBuilder cypherQuery = new StringBuilder();
+
+            Map<String, Object> params = new HashMap<>();
+
+            for (String r : activities) {
+                StringBuilder query = new StringBuilder();
+
+                String[] rd = r.split(";");
+                log.info("Row count: " + (rowCount + 1) + "| " + r);
+                log.info("Row count: " + (rowCount + 1)
+                        + "| Array Length: " + rd.length);
+
                 Map<String, Object> props = new HashMap<>();
 
-                props.put("userid", Long.parseLong(rd[0]));
-                props.put("username", sanitize(rd[1]));
-                props.put("firstname", sanitize(rd[2]));
-                props.put("lastname", sanitize(rd[3]));
-                props.put("name", sanitize(rd[2]) + " " + sanitize(rd[3]));
-                props.put("email", sanitize(rd[4]));
-                props.put("creationdate", Long.parseLong(rd[5]));
-                props.put("lastloggedin", Long.parseLong(rd[6]));
-                props.put("lastprofileupdate", Long.parseLong(rd[7]));
+                props.put("activityid", Long.parseLong(rd[0]));
+                props.put("objecttype", Integer.parseInt(rd[1]));
+                props.put("objectid", Integer.parseInt(rd[2]));
+                props.put("containertype", Integer.parseInt(rd[3]));
+                props.put("containerid", Integer.parseInt(rd[4]));
+                props.put("activitytype", getActivityType(Integer.parseInt(rd[5])));
+                props.put("userid", Integer.parseInt(rd[6]));
+                props.put("creationdate", Long.parseLong(rd[7]));
 
-                props.put("userenabled", true);
+                params.put("props", props);
+                params.put("userid", Integer.parseInt(rd[6]));
+
+                query.append("match (p:Person{userid:").append(Integer.parseInt(rd[6])).append("})");
+                query.append(" create unique (p)-[:created]->(a:Activity{");
+                query.append("activityid:").append(Long.parseLong(rd[0])).append(",");
+                query.append("objecttype:").append(Integer.parseInt(rd[1])).append(",");
+                query.append("objectid:").append(Integer.parseInt(rd[2])).append(",");
+                query.append("containertype:").append(Integer.parseInt(rd[3])).append(",");
+                query.append("containerid:").append(Integer.parseInt(rd[4])).append(",");
+                query.append("activitytype:\"").append(getActivityType(Integer.parseInt(rd[5]))).append("\",");
+                query.append("creationdate:").append(Long.parseLong(rd[7])).append("})");
+
 
                 //holder.add(props);
-
+                rowCount++;
 
                 try (Transaction tx = gd.beginTx()) {
-                    System.out.println("Processing row: " + rowCount);
-                    params.put("props", props);
-                    engine.query("create (p:Person{props})", params);
+                    log.info("Processing row: " + rowCount);
+
+                    log.info(query.toString());
+
+                    engine.query(query.toString(), null);
+
+                    //engine.query("match (p:Person{userid:{userid}}) create unique (p)-[:created]->(a:Activity{props})", params);
+
                     params.clear();
                     tx.success();
 
                 } catch (RestResultException rre) {
-                    log.info(rre.getLocalizedMessage());
+                    log.info(rre.getMessage());
                 } catch (CypherExecutionException cee) {
-                    log.info(cee.getLocalizedMessage());
+                    log.info(cee.getMessage());
                 } catch (Exception e) {
-                    log.info(e.getLocalizedMessage());
+                    log.info(e.getMessage());
                 }
-
-            } else {
-                //Log the violating row...
-                missedRows.add(rowCount);
-                log.info("Skipping row number: " + rowCount);
-
             }
-            rowCount++;
-        }
 
-        log.info("List of missed rows: " + missedRows.toString());
+            log.info("List of missed rows: " + missedRows.toString());
+
+        }
     }
 
     @Override
     public void addActivityToGraph(List<String> activities) {
-        int rowCount = 0;
-        List<Integer> missedRows = new ArrayList<>();
+        ProcessBatchActivities activityUpdates = new ProcessBatchActivities(activities);
+        new Thread(activityUpdates).start();
 
-        StringBuilder cypherQuery = new StringBuilder();
-
-        Map<String, Object> params = new HashMap<>();
-
-        for (String r : activities) {
-            StringBuilder query = new StringBuilder();
-
-            String[] rd = r.split(";");
-            log.info("Row count: " + (rowCount + 1) + "| " + r);
-            log.info("Row count: " + (rowCount + 1)
-                    + "| Array Length: " + rd.length);
-
-            Map<String, Object> props = new HashMap<>();
-
-            props.put("activityid", Long.parseLong(rd[0]));
-            props.put("objecttype", Integer.parseInt(rd[1]));
-            props.put("objectid", Integer.parseInt(rd[2]));
-            props.put("containertype", Integer.parseInt(rd[3]));
-            props.put("containerid", Integer.parseInt(rd[4]));
-            props.put("activitytype", getActivityType(Integer.parseInt(rd[5])));
-            props.put("userid", Integer.parseInt(rd[6]));
-            props.put("creationdate", Long.parseLong(rd[7]));
-
-            params.put("props", props);
-            params.put("userid", Integer.parseInt(rd[6]));
-
-            query.append("match (p:Person{userid:").append(Integer.parseInt(rd[6])).append("})");
-            query.append(" create unique (p)-[:created]->(a:Activity{");
-            query.append("activityid:").append(Long.parseLong(rd[0])).append(",");
-            query.append("objecttype:").append(Integer.parseInt(rd[1])).append(",");
-            query.append("objectid:").append(Integer.parseInt(rd[2])).append(",");
-            query.append("containertype:").append(Integer.parseInt(rd[3])).append(",");
-            query.append("containerid:").append(Integer.parseInt(rd[4])).append(",");
-            query.append("activitytype:\"").append(getActivityType(Integer.parseInt(rd[5]))).append("\",");
-            query.append("creationdate:").append(Long.parseLong(rd[7])).append("})");
-
-
-            //holder.add(props);
-            rowCount++;
-
-            try (Transaction tx = gd.beginTx()) {
-                log.info("Processing row: " + rowCount);
-
-                log.info(query.toString());
-
-                engine.query(query.toString(), null);
-
-                //engine.query("match (p:Person{userid:{userid}}) create unique (p)-[:created]->(a:Activity{props})", params);
-
-                params.clear();
-                tx.success();
-
-            } catch (RestResultException rre) {
-                log.info(rre.getMessage());
-            } catch (CypherExecutionException cee) {
-                log.info(cee.getMessage());
-            } catch (Exception e) {
-                log.info(e.getMessage());
-            }
-        }
-
-        log.info("List of missed rows: " + missedRows.toString());
     }
 
     private String getActivityType(int i) {
@@ -479,49 +511,13 @@ public class UserServiceImpl implements UserService {
             //log.info("Processing Activity Collection of size: " + activities.size());
 
             for (Activity activity : activities) {
-                activity.setProcessed(false);
+                if (activity.getUserID() > 1001) {
+                    activity.setProcessed(false);
+                    //Thinking we should be dumping the activity data in mongo?
+                    //And then run a scheduled task later to populate neo4j?
+                    Key<Activity> key = ds.save(activity);
+                }
 
-                //Thinking we should be dumping the activity data in mongo?
-                //And then run a scheduled task later to populate neo4j?
-                Key<Activity> key = ds.save(activity);
-
-                //log.info("Activity with id: {} saved in mongo store", (long) key.getId());
-
-//                Map<String, Object> props = new HashMap<>();
-//                //log.info("Activity: " + activity.toString());
-//
-//                props.put("activityid", activity.getActivityID());
-//                props.put("objecttype", activity.getTargetObjectType());
-//                props.put("objectid", activity.getTargetObjectID());
-//                props.put("containertype", activity.getContainerObjectType());
-//                props.put("containerid", activity.getContainerObjectID());
-//                props.put("activitytype", activity.getType());
-//                props.put("userid", activity.getUserID());
-//                props.put("creationdate", activity.getCreationDate());
-//
-//
-//                try (Transaction tx = gd.beginTx()) {
-//
-//                    params.put("props", props);
-//                    params.put("userid", activity.getUserID());
-//
-//                    //will need to log the statement below...
-//                    QueryResult<Map<String, Object>> query = engine.query("match (p:Person{userid:{userid}}) create unique (p)-[:created]->(a:Activity{props})", params);
-//
-//                    params.clear();
-//                    tx.success();
-//
-//                } catch (RestResultException rre) {
-//                    log.info(rre.getLocalizedMessage());
-//                } catch (CypherExecutionException cee) {
-//                    log.info(cee.getLocalizedMessage());
-//                }catch(Exception e) {
-//                    if ( e instanceof SocketTimeoutException){
-//                        log.info(e.getLocalizedMessage());
-//                    }else{
-//                        log.info(e.getLocalizedMessage());
-//                    }
-//                }
             }
         }
     }

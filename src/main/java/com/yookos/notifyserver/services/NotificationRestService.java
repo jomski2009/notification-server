@@ -27,4 +27,6 @@ public interface NotificationRestService {
     void sendTempNotification(NotificationResource notificationResource);
 
     void sendNotification(BatchNotificationResource batchNotificationResource);
+
+    String processBlockList();
 }

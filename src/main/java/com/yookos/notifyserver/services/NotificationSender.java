@@ -23,7 +23,7 @@ public class NotificationSender {
     public void sendNotification(NotificationResource notification) {
         template.setExchange("yookos.notifications");
         template.convertAndSend(RabbitConfig.notificationQueue, notification);
-        log.debug("Message sent: {}", notification.toString());
+        log.info("Message sent: {}", notification.toString());
     }
 
     public void sendPFNotification(Notification notification) {

@@ -1,6 +1,5 @@
 buildscript {
 	repositories{
-		//maven{url "http://repo.spring.io/libs-snapshot"}
 		maven{url "http://repo.spring.io/libs-release"}
 		mavenLocal()
         mavenCentral()
@@ -9,16 +8,22 @@ buildscript {
 	dependencies { classpath("org.springframework.boot:spring-boot-gradle-plugin:1.1.4.RELEASE") }
 }
 
+
 apply plugin: 'java'
-//apply plugin: 'eclipse'
 apply plugin: 'idea'
 apply plugin: 'spring-boot'
 apply plugin: 'war'
+apply plugin: 'application'
+
+applicationDefaultJvmArgs = [
+        "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005"
+]
+
+mainClassName = "com.yookos.notifyserver.Application"
 
 repositories{
 	mavenCentral()
     mavenLocal()
-	maven {url "http://repo.spring.io/libs-snapshot"}
 	maven {url "http://repo.spring.io/libs-release"}
     maven {url "http://repo.spring.io/libs-milestone"}
 	maven {url "http://m2.neo4j.org" }
@@ -37,10 +42,11 @@ dependencies {
 	compile 'com.sun.jersey:jersey-core:1.9.1'
 	compile 'org.neo4j:neo4j:2.0.0'
 	compile 'org.neo4j:neo4j-rest-graphdb:2.0.0'
-    compile 'org.mongodb.morphia:morphia:0.105'
+    compile 'org.mongodb.morphia:morphia:0.108'
     compile 'org.mongodb:mongo-java-driver:2.12.0'
     compile 'cglib:cglib-nodep:3.1'
     compile 'com.thoughtworks.proxytoys:proxytoys:1.0'
+    compile 'joda-time:joda-time:2.4'
 
 
 	testCompile("junit:junit:4.11")

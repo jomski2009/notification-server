@@ -89,91 +89,119 @@ public class GroupServiceImpl implements GroupService {
         }
     }
 
-    @Override
-    public void createGroupMemberships(List<String> rows) {
-        int rowCount = 0;
-        List<Map<String, Object>> holder = new ArrayList<>();
-        List<Integer> missedRows = new ArrayList<>();
+    class ProcessGroupMemberships implements Runnable {
+        List<String> rows;
 
-        Map<String, Object> params = new HashMap<>();
+        public ProcessGroupMemberships(List<String> rows) {
+            this.rows = rows;
+        }
 
-        for (String r : rows) {
-            String[] rd = r.split(";");
-            System.out.println("Row count: " + (rowCount + 1) + "| " + r);
-            System.out.println("Row count: " + (rowCount + 1)
-                    + "| Array Length: " + rd.length);
+        @Override
+        public void run() {
+            int rowCount = 0;
+            List<Map<String, Object>> holder = new ArrayList<>();
+            List<Integer> missedRows = new ArrayList<>();
 
-            // User user = new User();
-            Map<String, Object> relprops = new HashMap<String, Object>();
+            Map<String, Object> params = new HashMap<>();
+
+            for (String r : rows) {
+                String[] rd = r.split(";");
+                log.info("Row count: " + (rowCount + 1) + "| " + r);
+                log.info("Row count: " + (rowCount + 1)
+                        + "| Array Length: " + rd.length);
+
+                // User user = new User();
+                Map<String, Object> relprops = new HashMap<String, Object>();
 
 
-            params.put("groupid", Long.parseLong(rd[0]));
-            params.put("userid", Long.parseLong(rd[1]));
+                params.put("groupid", Long.parseLong(rd[0]));
+                params.put("userid", Long.parseLong(rd[1]));
 
-            relprops.put("membertype", Integer.parseInt(rd[2]));
-            relprops.put("creationdate", Long.parseLong(rd[3]));
-            relprops.put("membershipid", Integer.parseInt(rd[4]));
-            params.put("relprops", relprops);
+                relprops.put("membertype", Integer.parseInt(rd[2]));
+                relprops.put("creationdate", Long.parseLong(rd[3]));
+                relprops.put("membershipid", Integer.parseInt(rd[4]));
+                params.put("relprops", relprops);
 
-            //holder.add(props);
-            rowCount++;
+                //holder.add(props);
+                rowCount++;
 
-            try (Transaction tx = gd.beginTx()) {
-                System.out.println("Processing row: " + rowCount);
+                try (Transaction tx = gd.beginTx()) {
+                    System.out.println("Processing row: " + rowCount);
 
-                engine.query("match (p:Person{userid:{userid}}), (g:SocialGroup{groupid:{groupid}}) create (p)-[r:Member_of{relprops}]->(g)", params);
-                params.clear();
-                tx.success();
-            } catch (RestResultException rre) {
-                log.info(rre.getLocalizedMessage());
-                params.clear();
-            } catch (CypherExecutionException cee) {
-                log.info(cee.getLocalizedMessage());
-                params.clear();
-            } catch (Exception e) {
-                log.info(e.getLocalizedMessage());
-                params.clear();
+                    engine.query("match (p:Person{userid:{userid}}), (g:SocialGroup{groupid:{groupid}}) create (p)-[r:Member_of{relprops}]->(g)", params);
+                    params.clear();
+                    tx.success();
+                } catch (RestResultException rre) {
+                    log.info(rre.getLocalizedMessage());
+                    params.clear();
+                } catch (CypherExecutionException cee) {
+                    log.info(cee.getLocalizedMessage());
+                    params.clear();
+                } catch (Exception e) {
+                    log.info(e.getLocalizedMessage());
+                    params.clear();
+                }
+            }
+        }
+    }
+
+    class ProcessPageMemberships implements Runnable {
+        List<String> rows;
+
+        public ProcessPageMemberships(List<String> rows) {
+            this.rows = rows;
+        }
+
+        @Override
+        public void run() {
+            int rowCount = 0;
+            int totalNumber = rows.size();
+
+
+            Map<String, Object> params = new HashMap<>();
+
+            for (String r : rows) {
+                String[] rd = r.split(";");
+                log.info("Row " + (rowCount) + " of " + totalNumber);
+
+
+                params.put("userid", Long.parseLong(rd[0]));
+                params.put("browseid", Long.parseLong(rd[1]));
+
+                //holder.add(props);
+                rowCount++;
+
+                try (Transaction tx = gd.beginTx()) {
+                    log.info("Processing row: " + rowCount);
+
+                    QueryResult<Map<String, Object>> query = engine.query("match (p:Person{userid:{userid}}), (g:Page{browseid:{browseid}}) create unique (p)-[r:Follows]->(g) return g", params);
+
+                    params.clear();
+                    tx.success();
+                } catch (RestResultException rre) {
+                    log.info(rre.getLocalizedMessage());
+                    params.clear();
+                } catch (CypherExecutionException cee) {
+                    log.info(cee.getLocalizedMessage());
+                    params.clear();
+                } catch (Exception e) {
+                    log.info(e.getLocalizedMessage());
+                    params.clear();
+                }
             }
         }
     }
 
     @Override
+    public void createGroupMemberships(List<String> rows) {
+        ProcessGroupMemberships groupMemberships = new ProcessGroupMemberships(rows);
+        new Thread(groupMemberships).start();
+    }
+
+    @Override
     public void createSpaceFollowerships(List<String> rows) {
-        int rowCount = 0;
-        int totalNumber = rows.size();
-
-
-        Map<String, Object> params = new HashMap<>();
-
-        for (String r : rows) {
-            String[] rd = r.split(";");
-            log.info("Row " + (rowCount) + " of " + totalNumber);
-
-
-            params.put("userid", Long.parseLong(rd[0]));
-            params.put("browseid", Long.parseLong(rd[1]));
-
-            //holder.add(props);
-            rowCount++;
-
-            try (Transaction tx = gd.beginTx()) {
-                log.info("Processing row: " + rowCount);
-
-                QueryResult<Map<String, Object>> query = engine.query("match (p:Person{userid:{userid}}), (g:Page{browseid:{browseid}}) create unique (p)-[r:Follows]->(g) return g", params);
-
-                params.clear();
-                tx.success();
-            } catch (RestResultException rre) {
-                log.info(rre.getLocalizedMessage());
-                params.clear();
-            } catch (CypherExecutionException cee) {
-                log.info(cee.getLocalizedMessage());
-                params.clear();
-            } catch (Exception e) {
-                log.info(e.getLocalizedMessage());
-                params.clear();
-            }
-        }
+        ProcessPageMemberships processPageMemberships = new ProcessPageMemberships(rows);
+        new Thread(processPageMemberships).start();
     }
 
     @Override
@@ -195,7 +223,7 @@ public class GroupServiceImpl implements GroupService {
             props.put("spaceid", Integer.parseInt(rd[1]));
             props.put("name", rd[2]);
             props.put("displayname", rd[3]);
-            props.put("creationdate", Long.parseLong(rd[5]));
+            props.put("creationdate", Long.parseLong(rd[4]));
 
             //holder.add(props);
             rowCount++;

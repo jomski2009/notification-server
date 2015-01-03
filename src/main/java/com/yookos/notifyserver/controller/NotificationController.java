@@ -180,6 +180,7 @@ public class NotificationController {
     }
 
 
+
     @RequestMapping(value = "relationships/pcl/add", method = RequestMethod.POST)
     public ResponseEntity<UserRelationship> addPclRelationship(@RequestBody UserRelationship userRelationship) {
         userRelationship.setHasdevice(false);

@@ -47,32 +47,37 @@ public class SocialGroupServiceImpl implements SocialGroupService {
             //result = restAPIFacade.query(queryStatement, params, null);
 
             result = engine.query(queryStatement, params);
+            log.info(result.toString());
+
 
             tx.success();
+            for (Map<String, Object> item : result) {
+                int count1 = (int) item.get("membercount");
+                int count2 = (int) item.get("activitycount");
+
+                log.info(count1);
+                log.info(count2);
+
+
+                SocialGroup group = new SocialGroup();
+                RestNode node = (RestNode) item.get("g");
+                group.setCreationdate((long) node.getProperty("creationdate"));
+                group.setDisplayname((String) node.getProperty("displayname"));
+                group.setGroupid((Integer) node.getProperty("groupid"));
+                group.setName((String) node.getProperty("name"));
+                group.setStatus((Integer) node.getProperty("status"));
+
+                wrapper.setSocialGroup(group);
+                wrapper.setActivityCount((Integer) item.get("activitycount"));
+                wrapper.setMemberCount((Integer) item.get("membercount"));
+
+            }
+
+            return wrapper;
+
+        } catch (Exception e) {
+            log.error(e.getMessage());
         }
-
-        for (Map<String, Object> item : result) {
-            int count1 = (int) item.get("membercount");
-            int count2 = (int) item.get("activitycount");
-
-            log.info(count1);
-            log.info(count2);
-
-
-            SocialGroup group = new SocialGroup();
-            RestNode node = (RestNode) item.get("g");
-            group.setCreationdate((long) node.getProperty("creationdate"));
-            group.setDisplayname((String) node.getProperty("displayname"));
-            group.setGroupid((Integer) node.getProperty("groupid"));
-            group.setName((String) node.getProperty("name"));
-            group.setStatus((Integer) node.getProperty("status"));
-
-            wrapper.setSocialGroup(group);
-            wrapper.setActivityCount((Integer) item.get("activitycount"));
-            wrapper.setMemberCount((Integer) item.get("membercount"));
-
-        }
-
         return wrapper;
     }
 

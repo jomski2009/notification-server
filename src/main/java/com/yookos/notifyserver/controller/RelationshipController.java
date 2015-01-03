@@ -23,21 +23,21 @@ public class RelationshipController {
     @Autowired
     NotificationRestService notificationRestService;
 
-    @RequestMapping("pcl/add")
-    public ResponseEntity<String> addRelationship() {
-
-        return new ResponseEntity<>(HttpStatus.CREATED);
-    }
-
-    @RequestMapping(value = "add", method = RequestMethod.POST)
-    public ResponseEntity<UserRelationship> addUserRelationship(@RequestBody UserRelationship userRelationship) {
-        log.info("Incoming data: {}", userRelationship.toString());
-        userRelationship.setHasdevice(false);
-        UserRelationship relationship = notificationRestService.addToUserRelationship(userRelationship);
-        if (relationship != null) {
-            return new ResponseEntity<>(relationship, HttpStatus.OK);
-        } else {
-            return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
-        }
-    }
+//    @RequestMapping("pcl/add")
+//    public ResponseEntity<String> addRelationship() {
+//
+//        return new ResponseEntity<>(HttpStatus.CREATED);
+//    }
+//
+//    @RequestMapping(value = "add", method = RequestMethod.POST)
+//    public ResponseEntity<UserRelationship> addUserRelationship(@RequestBody UserRelationship userRelationship) {
+//        log.info("Incoming data: {}", userRelationship.toString());
+//        userRelationship.setHasdevice(false);
+//        UserRelationship relationship = notificationRestService.addToUserRelationship(userRelationship);
+//        if (relationship != null) {
+//            return new ResponseEntity<>(relationship, HttpStatus.OK);
+//        } else {
+//            return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
+//        }
+//    }
 }

@@ -35,14 +35,16 @@ public class NotificationReceiver {
     public void handleMessage(NotificationResource notification) {
         //Set process true from env props here
         process = true;
-
-        if (notification.getNotification().getContent().getObjectType().equals("action")) {
-            NData data = new NData(notification, notification.getNotification().getUserId());
-            doPush(data);
-            //Do nothing for now...
-        } else {
-            processNotifications(notification);
-        }
+        throw new RuntimeException("Will not handle messages");
+//        log.info("Received: {}", notification);
+//
+//        if (notification.getNotification().getContent().getObjectType().equals("action")) {
+//            NData data = new NData(notification, notification.getNotification().getUserId());
+//            doPush(data);
+//            //Do nothing for now...
+//        } else {
+//            processNotifications(notification);
+//        }
     }
 
     private void processNotifications(NotificationResource notification) {
@@ -58,26 +60,7 @@ public class NotificationReceiver {
             NData data = new NData(notification, notification.getNotification().getUserId());
             doPush(data);
         }
-//        } else {
-//            String json = gson.toJson(notification);
-//            HttpEntity postObject = new HttpEntity(json);
-//            long start = new Date().getTime();
-//            //log.info("dropping data: {}", notification);
-//            log.info("Sending to chat server...");
-//            try{
-//                ResponseEntity<String> result = restTemplate.exchange(URL_JSON, HttpMethod.POST, postObject, String.class);
-//                long end = new Date().getTime();
-//
-//                if (result != null) {
-//                    long timeSpent = end - start;
-//                    log.info("Returned result from chat server: {}. Time taken: {} msecs", result.getStatusCode(), timeSpent);
-//                }
-//
-//            }catch(HttpClientErrorException hcee){
-//                log.error(hcee.getRootCause().toString());
-//            }
-//
-//        }
+
     }
 
     private void doPush(NData data) {

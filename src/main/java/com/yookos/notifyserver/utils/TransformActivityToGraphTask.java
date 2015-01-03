@@ -1,5 +1,6 @@
 package com.yookos.notifyserver.utils;
 
+import com.mongodb.BasicDBObject;
 import com.mongodb.Mongo;
 import com.yookos.notifyserver.core.domain.Activity;
 import org.mongodb.morphia.Datastore;
@@ -14,6 +15,7 @@ import org.neo4j.rest.graphdb.util.QueryResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.env.Environment;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -27,7 +29,8 @@ import java.util.Map;
 @EnableScheduling
 @Component
 public class TransformActivityToGraphTask {
-    private final static String cronServerIp = "23.253.59.111";
+    private final static String cronServerIp = "10.223.243.14";
+    //private final static String cronServerIp = "192.168.2.15";
 
     Logger log = LoggerFactory.getLogger(this.getClass());
 
@@ -43,6 +46,10 @@ public class TransformActivityToGraphTask {
     @Autowired
     RestAPIFacade gd;
 
+    @Autowired
+    Environment env;
+
+
     /**
      * All this method does is to add a processed property to to the activity documents
      */
@@ -51,18 +58,18 @@ public class TransformActivityToGraphTask {
 
     }
 
-
-    @Scheduled(fixedDelay = 360000L, initialDelay = 10000L)
+    @Scheduled(fixedDelay = 60000L, initialDelay = 5000L)
     public void processActivities() {
         //This should only run on yookore-mcc
-        //log.info(NotificationHelper.getServerAddress().getHostAddress());
-        if (NotificationHelper.getServerAddress().getHostAddress().equals(cronServerIp)) {
-            //log.info("Starting ActivityTransformation");
-            Query<Activity> activities = ds.find(Activity.class, "processed", false);
-            //log.info("Number of activities to process: {}", activities.getBatchSize());
+        log.info(NotificationHelper.getServerAddress().getHostAddress());
+        if (env.getProperty("can.process.activities") != null && env.getProperty("can.process.activities").equals("true")) {
+            log.info("Starting ActivityTransformation");
+            Query<Activity> activities = ds.find(Activity.class, "processed", false).limit(10000);
+            log.info("Number of activities to process: {}", activities.getBatchSize());
 
             for (Activity activity : activities) {
                 StringBuilder query = new StringBuilder();
+                log.info("Processing Activity: {}", activity);
 
                 query.append("match (p:Person{userid:").append(activity.getUserID()).append("})");
                 query.append(" create unique (p)-[:created]->(a:Activity{");
@@ -77,20 +84,23 @@ public class TransformActivityToGraphTask {
 
                 try (Transaction tx = gd.beginTx()) {
 
-                    //log.info(query.toString());
+                    log.info(query.toString());
 
                     QueryResult<Map<String, Object>> query1 = engine.query(query.toString(), null);
 
                     RestNode node = (RestNode) query1.iterator().next().get("a");
 
 
+
                     //engine.query("match (p:Person{userid:{userid}}) create unique (p)-[:created]->(a:Activity{props})", params);
 
                     tx.success();
                     if (node != null) {
-                        //log.info("Node property: Activity id - {}", node.getProperty("activityid"));
+                        log.info("Node property: Activity id created - {}", node.getProperty("activityid"));
                         activity.setProcessed(true);
                         ds.save(activity);
+                    }else{
+                        log.info("The activity was not created. {}", activity.getActivityID());
                     }
 
                 } catch (RestResultException rre) {
